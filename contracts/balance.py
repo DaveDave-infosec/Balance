@@ -90,39 +90,45 @@ class BalanceProtocol(gl.Contract):
 
     case_counter: u256
 
-    def __init__(self, owner_address: str, fee_wallet_address: str, protocol_fee_bps: int):
-        self.owner = owner_address
-        self.fee_wallet = fee_wallet_address
+    def __init__(self, protocol_fee_bps: int):
+        deployer = str(gl.message.sender_address).lower()
+        self.owner = deployer
+        self.fee_wallet = deployer
         self.protocol_fee_bps = u256(protocol_fee_bps)
         self.case_counter = u256(0)
 
     @gl.public.write
-    def set_protocol_fee_bps(self, bps: int, caller: str):
-        if caller.lower() != self.owner.lower():
+    def set_protocol_fee_bps(self, bps: int):
+        sender = str(gl.message.sender_address).lower()
+        if sender != self.owner.lower():
             raise Exception("Only owner can set fee")
         if bps < 0 or bps > 2000:
             raise Exception("Fee out of bounds")
         self.protocol_fee_bps = u256(bps)
 
+    # Controlled faucet: only the owner may mint the testnet settlement token.
     @gl.public.write
     def mint(self, to_address: str, amount: int):
+        sender = str(gl.message.sender_address).lower()
+        if sender != self.owner.lower():
+            raise Exception("Only owner can mint")
         to_address = to_address.lower()
         cur = self.balances[to_address] if to_address in self.balances else u256(0)
         self.balances[to_address] = u256(int(cur) + amount)
 
     @gl.public.write
-    def create_agreement(self, spec: str, amount: int, deadline: str, deliverer_address: str, created_at: str, caller: str) -> str:
-        caller = caller.lower()
+    def create_agreement(self, spec: str, amount: int, deadline: str, deliverer_address: str, created_at: str) -> str:
+        payer = str(gl.message.sender_address).lower()
         deliverer = deliverer_address.lower()
         if amount <= 0:
             raise Exception("Amount must be positive")
-        if deliverer == caller:
+        if deliverer == payer:
             raise Exception("Payer and deliverer must differ")
         if spec is None or spec.strip() == "":
             raise Exception("Spec required")
         case_id = "case_" + str(int(self.case_counter))
         self.agreement_ids.append(case_id)
-        self.agreement_payer[case_id] = caller
+        self.agreement_payer[case_id] = payer
         self.agreement_deliverer[case_id] = deliverer
         self.agreement_spec[case_id] = spec
         self.agreement_amount[case_id] = u256(amount)
@@ -135,40 +141,40 @@ class BalanceProtocol(gl.Contract):
         return case_id
 
     @gl.public.write
-    def accept_agreement(self, case_id: str, caller: str):
-        caller = caller.lower()
+    def accept_agreement(self, case_id: str):
+        sender = str(gl.message.sender_address).lower()
         if case_id not in self.agreement_status:
             raise Exception("Unknown agreement")
         if self.agreement_status[case_id] != "created":
             raise Exception("Agreement not awaiting acceptance")
-        if caller != self.agreement_deliverer[case_id].lower():
+        if sender != self.agreement_deliverer[case_id].lower():
             raise Exception("Only the named deliverer can accept")
         self.agreement_status[case_id] = "accepted"
 
     @gl.public.write
-    def fund_escrow(self, case_id: str, caller: str):
-        caller = caller.lower()
+    def fund_escrow(self, case_id: str):
+        sender = str(gl.message.sender_address).lower()
         if case_id not in self.agreement_status:
             raise Exception("Unknown agreement")
         if self.agreement_status[case_id] != "accepted":
             raise Exception("Agreement not accepted yet")
-        if caller != self.agreement_payer[case_id].lower():
+        if sender != self.agreement_payer[case_id].lower():
             raise Exception("Only the payer can fund")
         amount = int(self.agreement_amount[case_id])
-        bal = int(self.balances[caller]) if caller in self.balances else 0
+        bal = int(self.balances[sender]) if sender in self.balances else 0
         if bal < amount:
             raise Exception("Insufficient genUSDC balance")
-        self.balances[caller] = u256(bal - amount)
+        self.balances[sender] = u256(bal - amount)
         self.agreement_status[case_id] = "active"
 
     @gl.public.write
-    def submit_delivery(self, case_id: str, primary_url: str, secondary_url: str, statement: str, caller: str):
-        caller = caller.lower()
+    def submit_delivery(self, case_id: str, primary_url: str, secondary_url: str, statement: str):
+        sender = str(gl.message.sender_address).lower()
         if case_id not in self.agreement_status:
             raise Exception("Unknown agreement")
         if self.agreement_status[case_id] != "active":
             raise Exception("Agreement not active")
-        if caller != self.agreement_deliverer[case_id].lower():
+        if sender != self.agreement_deliverer[case_id].lower():
             raise Exception("Only the deliverer can submit delivery")
         self.del_primary_url[case_id] = primary_url
         self.del_secondary_url[case_id] = secondary_url
@@ -177,13 +183,13 @@ class BalanceProtocol(gl.Contract):
         self.agreement_status[case_id] = "delivered"
 
     @gl.public.write
-    def accept_delivery(self, case_id: str, caller: str) -> str:
-        caller = caller.lower()
+    def accept_delivery(self, case_id: str) -> str:
+        sender = str(gl.message.sender_address).lower()
         if case_id not in self.agreement_status:
             raise Exception("Unknown agreement")
         if self.agreement_status[case_id] != "delivered":
             raise Exception("Nothing delivered to accept")
-        if caller != self.agreement_payer[case_id].lower():
+        if sender != self.agreement_payer[case_id].lower():
             raise Exception("Only the payer can accept delivery")
         amount = int(self.agreement_amount[case_id])
         fee = (amount * int(self.protocol_fee_bps)) // 10000
@@ -202,17 +208,14 @@ class BalanceProtocol(gl.Contract):
         self.agreement_status[case_id] = "settled"
         return "released:" + str(to_deliverer)
 
-    # Dispute submission is ATOMIC settlement: it fetches both bundles, reaches
-    # consensus on the fulfillment %, and splits the escrow in this same
-    # transaction. If consensus fails, the whole call reverts — nothing recorded.
     @gl.public.write
-    def dispute_delivery(self, case_id: str, primary_url: str, secondary_url: str, statement: str, caller: str) -> str:
-        caller = caller.lower()
+    def dispute_delivery(self, case_id: str, primary_url: str, secondary_url: str, statement: str) -> str:
+        sender = str(gl.message.sender_address).lower()
         if case_id not in self.agreement_status:
             raise Exception("Unknown agreement")
         if self.agreement_status[case_id] != "delivered":
             raise Exception("Can only dispute a delivered agreement")
-        if caller != self.agreement_payer[case_id].lower():
+        if sender != self.agreement_payer[case_id].lower():
             raise Exception("Only the payer can dispute")
 
         self.pay_primary_url[case_id] = primary_url
@@ -339,6 +342,10 @@ class BalanceProtocol(gl.Contract):
     @gl.public.view
     def get_protocol_fee_bps(self) -> int:
         return int(self.protocol_fee_bps)
+
+    @gl.public.view
+    def get_owner(self) -> str:
+        return self.owner
 
     def _build_agreement(self, case_id: str) -> dict:
         return {

@@ -79,27 +79,27 @@ export async function createAgreement(
   spec: string, amount: number, deadline: string,
   delivererAddress: string, createdAt: string, caller: string,
 ) {
-  return await balanceWrite("create_agreement", [spec, amount, deadline, delivererAddress, createdAt, caller], caller);
+  return await balanceWrite("create_agreement", [spec, amount, deadline, delivererAddress, createdAt], caller);
 }
 
 export async function acceptAgreement(caseId: string, caller: string) {
-  return await balanceWrite("accept_agreement", [caseId, caller], caller);
+  return await balanceWrite("accept_agreement", [caseId], caller);
 }
 
 export async function fundEscrow(caseId: string, caller: string) {
-  return await balanceWrite("fund_escrow", [caseId, caller], caller);
+  return await balanceWrite("fund_escrow", [caseId], caller);
 }
 
 export async function submitDelivery(caseId: string, primaryUrl: string, secondaryUrl: string, statement: string, caller: string) {
-  return await balanceWrite("submit_delivery", [caseId, primaryUrl, secondaryUrl, statement, caller], caller);
+  return await balanceWrite("submit_delivery", [caseId, primaryUrl, secondaryUrl, statement], caller);
 }
 
 export async function acceptDelivery(caseId: string, caller: string) {
-  return await balanceWrite("accept_delivery", [caseId, caller], caller);
+  return await balanceWrite("accept_delivery", [caseId], caller);
 }
 
 export async function disputeDelivery(caseId: string, primaryUrl: string, secondaryUrl: string, statement: string, caller: string) {
-  return await balanceWrite("dispute_delivery", [caseId, primaryUrl, secondaryUrl, statement, caller], caller);
+  return await balanceWrite("dispute_delivery", [caseId, primaryUrl, secondaryUrl, statement], caller);
 }
 
 export async function escrowBalanceOf(address: string) {

@@ -27,7 +27,7 @@ Both parties submit evidence independently. The judge verifies claims against th
 - **`contracts/balance.py`** — a single Python Intelligent Contract on GenLayer Studio. It holds the escrow, records each agreement and its locked criteria, and on dispute fetches evidence (`gl.eq_principle.strict_eq`), reasons to a fulfillment percentage by validator consensus (`gl.eq_principle.prompt_comparative`), and splits the escrow — atomically. It is the only thing that moves the money, and only by the consensus result.
 - **`frontend/`** — React + TypeScript + Vite, using `genlayer-js`.
 
-**Deployed contract:** `0x928f9A5a12403dd4cab955e861dF2d0CC494e2C9`
+**Deployed contract:** `0x9351FeaD5c7b19327579e6b5eB98f97f4fb5fD83`
 **Network:** GenLayer Studio (chain ID 61999). genUSDC is a mock settlement token for the testnet.
 
 ## Running the frontend

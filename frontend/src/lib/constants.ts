@@ -7,7 +7,7 @@ export const STUDIO_CHAIN_HEX = "0xF22F";
 // (VITE_ prefix) override for Vercel; fallbacks are our live testnet deploys.
 export const BALANCE_CONTRACT_ADDRESS =
   import.meta.env.VITE_BALANCE_CONTRACT_ADDRESS ||
-  "0x928f9A5a12403dd4cab955e861dF2d0CC494e2C9";
+  "0x9351FeaD5c7b19327579e6b5eB98f97f4fb5fD83";
 
 // Optional admin wallet (for a faucet/admin panel). Lowercased for comparison.
 export const OWNER_ADDRESS = (import.meta.env.VITE_OWNER_ADDRESS || "").toLowerCase();
