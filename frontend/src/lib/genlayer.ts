@@ -125,3 +125,7 @@ export async function getCaseCount() {
 export async function getProtocolFeeBps() {
   return await publicClient.readContract({ address: BALANCE_CONTRACT_ADDRESS, functionName: "get_protocol_fee_bps", args: [] } as any);
 }
+
+export async function getOwner() {
+  return await publicClient.readContract({ address: BALANCE_CONTRACT_ADDRESS, functionName: "get_owner", args: [] } as any);
+}

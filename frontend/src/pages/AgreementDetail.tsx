@@ -6,7 +6,7 @@ import { BeamMark } from "../components/BeamMark";
 import { SettlementReveal } from "../components/SettlementReveal";
 import {
   getAgreement, acceptAgreement, fundEscrow, submitDelivery,
-  acceptDelivery, disputeDelivery, escrowMint, escrowBalanceOf, getProtocolFeeBps,
+  acceptDelivery, disputeDelivery, escrowMint, escrowBalanceOf, getProtocolFeeBps, getOwner,
 } from "../lib/genlayer";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -78,6 +78,7 @@ export default function AgreementDetail() {
 
   const [balance, setBalance] = useState<number | null>(null);
   const [minting, setMinting] = useState(false);
+  const [owner, setOwner] = useState("");
 
   const [delPrimary, setDelPrimary] = useState("");
   const [delSecondary, setDelSecondary] = useState("");
@@ -112,6 +113,7 @@ export default function AgreementDetail() {
     return () => window.removeEventListener("focus", onFocus);
   }, [load]);
   useEffect(() => { getProtocolFeeBps().then((v) => setFeeBps(toNum(v))).catch(() => {}); }, []);
+  useEffect(() => { getOwner().then((o) => setOwner(String(o || "").toLowerCase())).catch(() => {}); }, []);
 
   const me = (address || "").toLowerCase();
   const isPayer = !!agreement && me === agreement.payer.toLowerCase();
@@ -333,9 +335,11 @@ export default function AgreementDetail() {
                   onClick={() => runAction(() => fundEscrow(caseId!, address), "accepted", ["Funding escrow…", "Finalizing…"])}>
                   {busy ? "Working…" : "Fund " + a.amount.toLocaleString() + " genUSDC"}
                 </button>
-                <button className="btn btn-ghost" disabled={minting} onClick={doMint}>
-                  {minting ? "Minting…" : "Get 10,000 test genUSDC"}
-                </button>
+                {owner && me === owner ? (
+                  <button className="btn btn-ghost" disabled={minting} onClick={doMint}>
+                    {minting ? "Minting…" : "Get 10,000 test genUSDC"}
+                  </button>
+                ) : null}
               </div>
             </>
           ) : (

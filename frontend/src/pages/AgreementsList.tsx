@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useWallet } from "../hooks/useWallet";
 import type { Agreement } from "../lib/constants";
-import { getAgreementsByParty, escrowBalanceOf, escrowMint } from "../lib/genlayer";
+import { getAgreementsByParty, escrowBalanceOf, escrowMint, getOwner } from "../lib/genlayer";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function toNum(v: any): number { return typeof v === "bigint" ? Number(v) : Number(v ?? 0); }
@@ -42,6 +42,7 @@ export default function AgreementsList() {
   const [error, setError] = useState("");
   const [balance, setBalance] = useState<number | null>(null);
   const [minting, setMinting] = useState(false);
+  const [owner, setOwner] = useState("");
 
   const load = useCallback(async (silent?: boolean) => {
     if (!address) return;
@@ -67,6 +68,8 @@ export default function AgreementsList() {
     const id = setInterval(() => load(true), 6000);
     return () => { window.removeEventListener("focus", onFocus); clearInterval(id); };
   }, [load]);
+
+  useEffect(() => { getOwner().then((o) => setOwner(String(o || "").toLowerCase())).catch(() => {}); }, []);
 
   const doMint = async () => {
     if (!address) return;
@@ -107,9 +110,13 @@ export default function AgreementsList() {
 
       <div className="wallet-summary">
         <span className="balance-line">Balance: <span className="mono">{balance === null ? "…" : balance.toLocaleString()}</span> genUSDC</span>
-        <button className="btn btn-ghost" disabled={minting} onClick={doMint}>
-          {minting ? "Minting…" : "Get 10,000 test genUSDC"}
-        </button>
+        {owner && address.toLowerCase() === owner ? (
+          <button className="btn btn-ghost" disabled={minting} onClick={doMint}>
+            {minting ? "Minting…" : "Get 10,000 test genUSDC"}
+          </button>
+        ) : (
+          <span className="muted" style={{ fontSize: "13px" }}>Test genUSDC is owner-minted</span>
+        )}
       </div>
 
       {loading ? <p className="muted">Loading…</p> : null}
