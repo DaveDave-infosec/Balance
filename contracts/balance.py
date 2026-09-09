@@ -1,6 +1,7 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 from genlayer import *
 import json
+import hashlib
 
 
 BALANCE_PROMPT = """You are Balance, an impartial settlement judge. Your job is to decide how much
@@ -81,6 +82,8 @@ class BalanceProtocol(gl.Contract):
     divergence_note: TreeMap[str, str]
     deliverer_evidence_assessment: TreeMap[str, str]
     payer_evidence_assessment: TreeMap[str, str]
+    deliverer_evidence_hash: TreeMap[str, str]
+    payer_evidence_hash: TreeMap[str, str]
 
     settled_fulfillment_pct: TreeMap[str, u256]
     settled_to_deliverer: TreeMap[str, u256]
@@ -231,42 +234,48 @@ class BalanceProtocol(gl.Contract):
         pay_secondary = secondary_url
         pay_stmt = statement
 
-        def _fetch_one(url: str) -> str:
+        def _fetch_one(url: str):
             if not url or not url.strip():
-                return "NOT_PROVIDED"
+                return ("NOT_PROVIDED", "")
             try:
                 content = gl.nondet.web.render(url, mode="text")
                 if content is None:
-                    return "FETCH_FAILED_OR_UNREACHABLE"
+                    return ("FETCH_FAILED_OR_UNREACHABLE", "")
                 text = str(content).strip()
                 if text == "":
-                    return "EMPTY_RESOURCE"
-                return text[:4000]
+                    return ("EMPTY_RESOURCE", "")
+                return ("OK", text)
             except Exception:
-                return "FETCH_FAILED_OR_UNREACHABLE"
+                return ("FETCH_FAILED_OR_UNREACHABLE", "")
+
+        def _bundle(primary_url: str, secondary_url: str) -> str:
+            p_status, p_text = _fetch_one(primary_url)
+            s_status, s_text = _fetch_one(secondary_url)
+            full = json.dumps({
+                "primary": {"url": primary_url, "status": p_status, "content": p_text},
+                "secondary": {"url": secondary_url, "status": s_status, "content": s_text},
+            }, sort_keys=True)
+            h = hashlib.sha256(full.encode("utf-8")).hexdigest()
+            view = json.dumps({
+                "primary": {"url": primary_url, "status": p_status, "content": p_text[:8000]},
+                "secondary": {"url": secondary_url, "status": s_status, "content": s_text[:8000]},
+            }, sort_keys=True)
+            return json.dumps({"hash": h, "bytes": len(full), "view": view}, sort_keys=True)
 
         def fetch_deliverer() -> str:
-            out = {
-                "primary_url": del_primary,
-                "primary_content": _fetch_one(del_primary),
-                "secondary_url": del_secondary,
-                "secondary_content": _fetch_one(del_secondary),
-            }
-            return json.dumps(out, sort_keys=True)
-        deliverer_evidence = gl.eq_principle.strict_eq(fetch_deliverer)
+            return _bundle(del_primary, del_secondary)
+        deliverer_bundle = gl.eq_principle.strict_eq(fetch_deliverer)
 
         def fetch_payer() -> str:
-            out = {
-                "primary_url": pay_primary,
-                "primary_content": _fetch_one(pay_primary),
-                "secondary_url": pay_secondary,
-                "secondary_content": _fetch_one(pay_secondary),
-            }
-            return json.dumps(out, sort_keys=True)
-        payer_evidence = gl.eq_principle.strict_eq(fetch_payer)
+            return _bundle(pay_primary, pay_secondary)
+        payer_bundle = gl.eq_principle.strict_eq(fetch_payer)
 
-        del_evidence_local = deliverer_evidence
-        pay_evidence_local = payer_evidence
+        del_parsed = json.loads(deliverer_bundle)
+        pay_parsed = json.loads(payer_bundle)
+        del_evidence_local = del_parsed["view"]
+        pay_evidence_local = pay_parsed["view"]
+        del_hash_local = del_parsed["hash"]
+        pay_hash_local = pay_parsed["hash"]
 
         def judge_fn() -> str:
             prompt = BALANCE_PROMPT.format(
@@ -308,6 +317,8 @@ class BalanceProtocol(gl.Contract):
         self.divergence_note[case_id] = str(judgment.get("divergence_note", ""))
         self.deliverer_evidence_assessment[case_id] = str(judgment.get("deliverer_evidence_assessment", ""))
         self.payer_evidence_assessment[case_id] = str(judgment.get("payer_evidence_assessment", ""))
+        self.deliverer_evidence_hash[case_id] = del_hash_local
+        self.payer_evidence_hash[case_id] = pay_hash_local
 
         amount = int(self.agreement_amount[case_id])
         fee = (amount * int(self.protocol_fee_bps)) // 10000
@@ -371,6 +382,8 @@ class BalanceProtocol(gl.Contract):
             "divergence_note": self.divergence_note[case_id] if case_id in self.divergence_note else "",
             "deliverer_evidence_assessment": self.deliverer_evidence_assessment[case_id] if case_id in self.deliverer_evidence_assessment else "",
             "payer_evidence_assessment": self.payer_evidence_assessment[case_id] if case_id in self.payer_evidence_assessment else "",
+            "deliverer_evidence_hash": self.deliverer_evidence_hash[case_id] if case_id in self.deliverer_evidence_hash else "",
+            "payer_evidence_hash": self.payer_evidence_hash[case_id] if case_id in self.payer_evidence_hash else "",
             "settled_verdict_id": self.settled_verdict_id[case_id] if case_id in self.settled_verdict_id else "",
             "settled_fulfillment_pct": int(self.settled_fulfillment_pct[case_id]) if case_id in self.settled_fulfillment_pct else 0,
             "settled_to_deliverer": int(self.settled_to_deliverer[case_id]) if case_id in self.settled_to_deliverer else 0,

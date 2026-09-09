@@ -38,6 +38,8 @@ function normalizeAgreement(raw: any): Agreement | null {
     divergence_note: String(raw.divergence_note || ""),
     deliverer_evidence_assessment: String(raw.deliverer_evidence_assessment || ""),
     payer_evidence_assessment: String(raw.payer_evidence_assessment || ""),
+    deliverer_evidence_hash: String(raw.deliverer_evidence_hash || ""),
+    payer_evidence_hash: String(raw.payer_evidence_hash || ""),
     settled_verdict_id: String(raw.settled_verdict_id || ""),
     settled_fulfillment_pct: toNum(raw.settled_fulfillment_pct),
     settled_to_deliverer: toNum(raw.settled_to_deliverer),
@@ -135,7 +137,7 @@ export default function AgreementDetail() {
       await doWrite();
       setPhase(phases[1] || "Finalizing on-chain…");
       for (let i = 0; i < 40; i++) {
-        await sleep(3000);
+        await sleep(5000);
         const raw = await getAgreement(caseId!);
         const a = normalizeAgreement(raw);
         if (a && a.status !== prevStatus) { setAgreement(a); return; }
@@ -155,7 +157,7 @@ export default function AgreementDetail() {
       const before = balance ?? 0;
       await escrowMint(address, 10000, address);
       for (let i = 0; i < 20; i++) {
-        await sleep(3000);
+        await sleep(5000);
         const b = toNum(await escrowBalanceOf(address));
         if (b > before) { setBalance(b); break; }
       }
@@ -171,8 +173,8 @@ export default function AgreementDetail() {
       await disputeDelivery(caseId!, dispPrimary.trim(), dispSecondary.trim(), dispStatement.trim(), address);
       setSettlePhase("consensus");
       let settledAg: Agreement | null = null;
-      for (let i = 0; i < 80; i++) {
-        await sleep(3000);
+      for (let i = 0; i < 48; i++) {
+        await sleep(5000);
         const raw = await getAgreement(caseId!);
         const ag = normalizeAgreement(raw);
         if (ag && ag.status === "settled") { settledAg = ag; break; }
@@ -290,17 +292,36 @@ export default function AgreementDetail() {
       ) : null}
 
       {hasReasoning ? (
-        <div className="verdict-panel">
-          <div className="spec-head">Consensus reasoning</div>
-          <p className="verdict-reasoning">{a.reasoning_summary}</p>
-          <div className="verdict-grid">
-            <div><span className="split-lbl">Confidence</span><div>{a.confidence_level}</div></div>
+        <>
+          <div className="verdict-panel">
+            <div className="spec-head">⚖ Disagreement Insight</div>
+            <p className="di-sub">Where competent evaluators split is where the real judgment lives — the verdict preserves both sides.</p>
+            <div className="di-split">
+              <div className="di-majority">
+                <div className="di-label">Majority position</div>
+                <p>{a.reasoning_summary}</p>
+              </div>
+              <div className="di-minority">
+                <div className="di-label">Minority position</div>
+                <p>{a.minority_note || "No materially dissenting view surfaced."}</p>
+              </div>
+            </div>
+            <div className="verdict-grid">
+              <div><span className="split-lbl">Confidence</span><div>{a.confidence_level}</div></div>
+            </div>
+            {a.divergence_note ? <p className="verdict-note"><span className="evidence-label">Where the bundles diverged: </span>{a.divergence_note}</p> : null}
+            {a.deliverer_evidence_assessment ? <p className="verdict-note"><span className="evidence-label" style={{ color: "var(--party-b)" }}>Deliverer evidence: </span>{a.deliverer_evidence_assessment}</p> : null}
+            {a.payer_evidence_assessment ? <p className="verdict-note"><span className="evidence-label" style={{ color: "var(--party-a)" }}>Payer evidence: </span>{a.payer_evidence_assessment}</p> : null}
           </div>
-          {a.divergence_note ? <p className="verdict-note"><span className="evidence-label">Where the bundles diverged: </span>{a.divergence_note}</p> : null}
-          {a.deliverer_evidence_assessment ? <p className="verdict-note"><span className="evidence-label" style={{ color: "var(--party-b)" }}>Deliverer evidence: </span>{a.deliverer_evidence_assessment}</p> : null}
-          {a.payer_evidence_assessment ? <p className="verdict-note"><span className="evidence-label" style={{ color: "var(--party-a)" }}>Payer evidence: </span>{a.payer_evidence_assessment}</p> : null}
-          {a.minority_note ? <div className="minority"><div className="split-lbl">Minority view, preserved</div><p>{a.minority_note}</p></div> : null}
-        </div>
+          {(a.deliverer_evidence_hash || a.payer_evidence_hash) ? (
+            <div className="evidence-hashes">
+              <div className="spec-head">Content-addressed evidence · sha256</div>
+              <div className="hash-row"><span className="evidence-label">Deliverer bundle: </span><span className="mono hash-val">{a.deliverer_evidence_hash}</span></div>
+              <div className="hash-row"><span className="evidence-label">Payer bundle: </span><span className="mono hash-val">{a.payer_evidence_hash}</span></div>
+              <p className="hint">The exact fetched evidence is hashed on-chain, so the verdict is provably bound to what was judged.</p>
+            </div>
+          ) : null}
+        </>
       ) : null}
 
       {a.status === "created" ? (

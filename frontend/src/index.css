@@ -353,3 +353,24 @@ textarea.input { resize: vertical; line-height: 1.5; }
   .doc h2 { font-size: 20px; }
   .doc p, .doc .lead { font-size: 16px; }
 }
+
+.wallet-dd-label { padding:8px 14px 4px; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-soft); border-bottom:1px solid var(--rule); margin-bottom:4px; }
+
+/* Lift header above page content so the wallet dropdown is clickable */
+.site-header { z-index: 100; }
+.wallet-dropdown { min-width: 210px; z-index: 200; box-shadow: 0 6px 22px rgba(36, 30, 23, 0.18); }
+.wallet-dd-item { white-space: nowrap; }
+
+.di-sub { font-size:14px; color:var(--ink-soft); margin:2px 0 12px; }
+.di-split { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:12px; }
+.di-majority, .di-minority { padding:14px 16px; border-radius:var(--radius); background:var(--ground); border:1px solid var(--rule); }
+.di-majority { border-left:4px solid var(--party-b); }
+.di-minority { border-left:4px solid var(--party-a); }
+.di-label { font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-soft); margin-bottom:6px; }
+.di-majority .di-label { color:var(--party-b); }
+.di-minority .di-label { color:var(--party-a); }
+.di-split p { margin:0; font-size:15px; line-height:1.5; }
+.evidence-hashes { border:1px solid var(--rule); border-radius:var(--radius); background:var(--ground-panel); padding:14px 16px; margin:14px 0; }
+.hash-row { font-size:13px; margin:4px 0; }
+.hash-val { word-break:break-all; }
+@media (max-width:680px){ .di-split { grid-template-columns:1fr; } }

@@ -7,7 +7,7 @@ const ADDR = /^0x[0-9a-fA-F]{40}$/;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export default function CreateAgreement() {
-  const { address, connect, connecting } = useWallet();
+  const { address } = useWallet();
   const navigate = useNavigate();
 
   const [spec, setSpec] = useState("");
@@ -53,7 +53,7 @@ export default function CreateAgreement() {
       }
       setPhase("Waiting for finalization\u2026");
       for (let i = 0; i < 40; i++) {
-        await sleep(3000);
+        await sleep(5000);
         const countAfter = Number(await getCaseCount());
         if (countAfter > countBefore) {
           navigate("/agreement/case_" + (countAfter - 1));
@@ -73,10 +73,7 @@ export default function CreateAgreement() {
     return (
       <section className="form-card">
         <h1>Create an agreement</h1>
-        <p className="muted">Connect your wallet to draft an agreement. You'll be Party A &mdash; the payer.</p>
-        <button className="btn btn-primary" onClick={connect} disabled={connecting}>
-          {connecting ? "Connecting\u2026" : "Connect Wallet"}
-        </button>
+        <p className="muted">Preparing your session wallet…</p>
       </section>
     );
   }

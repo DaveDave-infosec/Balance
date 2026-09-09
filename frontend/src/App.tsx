@@ -12,10 +12,16 @@ function shortAddr(a: string) {
 }
 
 function Header() {
-  const { address, connect, connecting, disconnect } = useWallet();
+  const { address, mode, connectMetaMask, useSessionWallet, regenerate, importKey } = useWallet();
   const loc = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const on = (p: string) => (loc.pathname === p ? "active" : "");
+  const copyAddr = () => { if (address && navigator.clipboard) navigator.clipboard.writeText(address); setMenuOpen(false); };
+  const doImport = () => {
+    const k = window.prompt("Paste a private key (0x + 64 hex) to sign as that wallet — testnet only:");
+    if (k) importKey(k.trim());
+    setMenuOpen(false);
+  };
   return (
     <header className="site-header">
       <Link to="/" className="brand">
@@ -28,22 +34,26 @@ function Header() {
         <Link to="/how" className={on("/how")}>How It Works</Link>
       </nav>
       <div className="wallet-box">
-        {address ? (
-          <div className="wallet-menu">
-            <button className="wallet-addr mono" onClick={() => setMenuOpen((o) => !o)}>
-              {shortAddr(address)} <span className="caret">▾</span>
-            </button>
-            {menuOpen ? (
-              <div className="wallet-dropdown">
-                <button className="wallet-dd-item" onClick={() => { disconnect(); setMenuOpen(false); }}>Disconnect</button>
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <button className="btn btn-primary" onClick={connect} disabled={connecting}>
-            {connecting ? "Connecting\u2026" : "Connect Wallet"}
+        <div className="wallet-menu">
+          <button className="wallet-addr mono" onClick={() => setMenuOpen((o) => !o)} title="In-browser session wallet">
+            {address ? shortAddr(address) : "…"} <span className="caret">▾</span>
           </button>
-        )}
+          {menuOpen ? (
+            <div className="wallet-dropdown">
+              <div className="wallet-dd-label mono">{mode === "metamask" ? "MetaMask" : "Session wallet"}</div>
+              <button className="wallet-dd-item" onClick={copyAddr}>Copy address</button>
+              {mode === "session" ? (
+                <>
+                  <button className="wallet-dd-item" onClick={() => { connectMetaMask(); setMenuOpen(false); }}>Connect MetaMask</button>
+                  <button className="wallet-dd-item" onClick={() => { regenerate(); setMenuOpen(false); }}>New session wallet</button>
+                  <button className="wallet-dd-item" onClick={doImport}>Import key (owner)</button>
+                </>
+              ) : (
+                <button className="wallet-dd-item" onClick={() => { useSessionWallet(); setMenuOpen(false); }}>Use session wallet</button>
+              )}
+            </div>
+          ) : null}
+        </div>
       </div>
     </header>
   );

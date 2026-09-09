@@ -27,7 +27,7 @@ Both parties submit evidence independently. The judge verifies claims against th
 - **`contracts/balance.py`** — a single Python Intelligent Contract on GenLayer Studio. It holds the escrow, records each agreement and its locked criteria, and on dispute fetches evidence (`gl.eq_principle.strict_eq`), reasons to a fulfillment percentage by validator consensus (`gl.eq_principle.prompt_comparative`), and splits the escrow — atomically. It is the only thing that moves the money, and only by the consensus result.
 - **`frontend/`** — React + TypeScript + Vite, using `genlayer-js`.
 
-**Deployed contract:** `0x9351FeaD5c7b19327579e6b5eB98f97f4fb5fD83`
+**Deployed contract:** `0xABd9e20761BF1724E3206790C3600329be225f6B`
 **Network:** GenLayer Studio (chain ID 61999). genUSDC is a mock settlement token for the testnet.
 
 ## Running the frontend
@@ -55,3 +55,18 @@ Tested across the full fairness range on real projects:
 | Partial deliverable | 60% |
 | Complete project, documented limitation | 74–80% |
 | Complete project | 92% |
+
+## Tests
+
+The contract is covered by a real test suite (`genlayer-test`, direct in-process GenVM) — no skips, no copied logic. 15 tests assert sender-derived authorization, owner-gated minting, the state-machine guards, both settlement paths, the proportional split at multiple verdicts, and the on-chain evidence hash. See [TESTING.md](TESTING.md).
+
+Run:
+
+```bash
+pip install "genlayer-test[sim]==0.29.2"
+python -m pytest tests/test_guards.py -v
+```
+
+## Evidence integrity & disagreement
+
+On a dispute, the judge fetches both parties' evidence, and the full fetched content is `sha256`-hashed and recorded on the settled case — so the verdict is provably bound to exactly what was judged. Every settlement preserves both a **Majority** and a **Minority** position, surfacing where competent evaluators would split.

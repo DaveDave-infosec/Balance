@@ -1,55 +1,94 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { connectWalletAndSwitch } from "../lib/genlayer";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { setSessionWallet, setMetaMaskWallet, connectMetaMask as _connectMetaMask, generatePrivateKey } from "../lib/genlayer";
+
+const KEY = "balance_session_pk";
+const PK_RE = /^0x[0-9a-fA-F]{64}$/;
+
+type Mode = "session" | "metamask";
 
 interface WalletState {
   address: string;
-  connecting: boolean;
+  mode: Mode;
   error: string;
-  connect: () => Promise<void>;
-  disconnect: () => void;
+  connectMetaMask: () => Promise<void>;
+  useSessionWallet: () => void;
+  regenerate: () => void;
+  importKey: (pk: string) => void;
 }
 
 const WalletContext = createContext<WalletState | undefined>(undefined);
 
-export function WalletProvider({ children }: { children: ReactNode }) {
-  const [address, setAddress] = useState<string>("");
-  const [connecting, setConnecting] = useState(false);
-  const [error, setError] = useState<string>("");
+function loadOrCreate(): string {
+  let pk = "";
+  try { pk = localStorage.getItem(KEY) || ""; } catch { pk = ""; }
+  if (!PK_RE.test(pk)) {
+    pk = generatePrivateKey();
+    try { localStorage.setItem(KEY, pk); } catch { /* ignore */ }
+  }
+  return pk;
+}
 
-  const connect = async () => {
-    setConnecting(true);
-    setError("");
-    try {
-      const addr = await connectWalletAndSwitch();
-      setAddress(addr);
-    } catch (e: any) {
-      setError(e?.message || "Failed to connect wallet");
-    } finally {
-      setConnecting(false);
-    }
+export function WalletProvider({ children }: { children: ReactNode }) {
+  const [address, setAddress] = useState("");
+  const [mode, setMode] = useState<Mode>("session");
+  const [error, setError] = useState("");
+  const modeRef = useRef<Mode>("session");
+
+  const applySession = () => {
+    const pk = loadOrCreate();
+    setAddress(setSessionWallet(pk));
+    setMode("session");
+    modeRef.current = "session";
   };
 
-  const disconnect = () => setAddress("");
+  useEffect(() => { applySession(); }, []);
 
   useEffect(() => {
     const eth = (window as any).ethereum;
-    if (!eth) return;
-    eth
-      .request({ method: "eth_accounts" })
-      .then((accts: string[]) => {
-        if (accts && accts.length > 0) setAddress(accts[0]);
-      })
-      .catch(() => {});
-    const onAccounts = (accts: string[]) =>
-      setAddress(accts && accts.length > 0 ? accts[0] : "");
-    eth.on?.("accountsChanged", onAccounts);
-    return () => {
-      eth.removeListener?.("accountsChanged", onAccounts);
+    if (!eth?.on) return;
+    const onAccts = (accts: string[]) => {
+      if (modeRef.current === "metamask" && accts && accts.length) {
+        setAddress(setMetaMaskWallet(accts[0]));
+      }
     };
+    eth.on("accountsChanged", onAccts);
+    return () => eth.removeListener?.("accountsChanged", onAccts);
   }, []);
 
+  const connectMetaMask = async () => {
+    setError("");
+    try {
+      const addr = await _connectMetaMask();
+      setAddress(addr);
+      setMode("metamask");
+      modeRef.current = "metamask";
+    } catch (e: any) {
+      setError(e?.message || "Failed to connect MetaMask.");
+      alert(e?.message || "Failed to connect MetaMask.");
+    }
+  };
+
+  const useSessionWallet = () => { setError(""); applySession(); };
+
+  const regenerate = () => {
+    const pk = generatePrivateKey();
+    try { localStorage.setItem(KEY, pk); } catch { /* ignore */ }
+    setAddress(setSessionWallet(pk));
+    setMode("session");
+    modeRef.current = "session";
+  };
+
+  const importKey = (pk: string) => {
+    const k = pk.trim();
+    if (!PK_RE.test(k)) { alert("Invalid private key — need 0x followed by 64 hex characters."); return; }
+    try { localStorage.setItem(KEY, k); } catch { /* ignore */ }
+    setAddress(setSessionWallet(k));
+    setMode("session");
+    modeRef.current = "session";
+  };
+
   return (
-    <WalletContext.Provider value={{ address, connecting, error, connect, disconnect }}>
+    <WalletContext.Provider value={{ address, mode, error, connectMetaMask, useSessionWallet, regenerate, importKey }}>
       {children}
     </WalletContext.Provider>
   );

@@ -36,7 +36,7 @@ function normalizeAgreement(raw: any): Agreement | null {
 }
 
 export default function AgreementsList() {
-  const { address, connect, connecting } = useWallet();
+  const { address } = useWallet();
   const [items, setItems] = useState<Agreement[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -65,8 +65,7 @@ export default function AgreementsList() {
   useEffect(() => {
     const onFocus = () => load(true);
     window.addEventListener("focus", onFocus);
-    const id = setInterval(() => load(true), 6000);
-    return () => { window.removeEventListener("focus", onFocus); clearInterval(id); };
+    return () => { window.removeEventListener("focus", onFocus); };
   }, [load]);
 
   useEffect(() => { getOwner().then((o) => setOwner(String(o || "").toLowerCase())).catch(() => {}); }, []);
@@ -90,10 +89,7 @@ export default function AgreementsList() {
     return (
       <section className="form-card">
         <h1>Agreements</h1>
-        <p className="muted">Connect your wallet to see the agreements you're part of.</p>
-        <button className="btn btn-primary" onClick={connect} disabled={connecting}>
-          {connecting ? "Connecting…" : "Connect Wallet"}
-        </button>
+        <p className="muted">Preparing your session wallet…</p>
       </section>
     );
   }
