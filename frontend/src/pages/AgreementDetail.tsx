@@ -7,6 +7,7 @@ import { SettlementReveal } from "../components/SettlementReveal";
 import {
   getAgreement, acceptAgreement, fundEscrow, submitDelivery,
   acceptDelivery, disputeDelivery, escrowMint, escrowBalanceOf, getProtocolFeeBps, getOwner,
+  cancelAgreement, reclaimExpired, claimStaleDelivery,
 } from "../lib/genlayer";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -45,6 +46,8 @@ function normalizeAgreement(raw: any): Agreement | null {
     settled_to_deliverer: toNum(raw.settled_to_deliverer),
     settled_to_payer: toNum(raw.settled_to_payer),
     settled_fee: toNum(raw.settled_fee),
+    fee_bps: toNum(raw.fee_bps),
+    settled_at: String(raw.settled_at || ""),
   };
 }
 
@@ -207,6 +210,7 @@ export default function AgreementDetail() {
   const a = agreement;
   const fee = Math.floor((a.amount * feeBps) / 10000);
   const distributable = a.amount - fee;
+  const deadlinePassed = !!a.deadline && new Date().toISOString().slice(0, 10) > a.deadline.slice(0, 10);
   const staticTilt = (a.settled_fulfillment_pct - 50) * 0.45;
   const revealPct = a.status === "settled" ? a.settled_fulfillment_pct : null;
   const hasReasoning = !!(a.reasoning_summary && a.reasoning_summary.length > 0);
@@ -265,7 +269,7 @@ export default function AgreementDetail() {
         />
       ) : null}
 
-      {a.status === "settled" && settlePhase === "" ? (
+      {(a.status === "settled" || a.status === "refunded") && settlePhase === "" ? (
         <div className="settled">
           <div className="settled-top">
             <BeamMark size={72} tilt={staticTilt} />
@@ -340,6 +344,14 @@ export default function AgreementDetail() {
           ) : (
             <p className="action-wait">Waiting for the deliverer to accept the locked criteria.</p>
           )}
+          {isPayer ? (
+            <div className="btn-row">
+              <button className="btn btn-ghost" disabled={busy}
+                onClick={() => runAction(() => cancelAgreement(caseId!, address), "created", ["Cancelling…", "Finalizing…"])}>
+                {busy ? "Working…" : "Cancel agreement"}
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -361,6 +373,10 @@ export default function AgreementDetail() {
                     {minting ? "Minting…" : "Get 10,000 test genUSDC"}
                   </button>
                 ) : null}
+                <button className="btn btn-ghost" disabled={busy}
+                  onClick={() => runAction(() => cancelAgreement(caseId!, address), "accepted", ["Cancelling…", "Finalizing…"])}>
+                  Cancel
+                </button>
               </div>
             </>
           ) : (
@@ -397,6 +413,14 @@ export default function AgreementDetail() {
           ) : (
             <p className="action-wait">Waiting for the deliverer to submit the deliverable.</p>
           )}
+          {isPayer && deadlinePassed ? (
+            <div className="btn-row">
+              <button className="btn btn-ghost" disabled={busy}
+                onClick={() => runAction(() => reclaimExpired(caseId!, address), "active", ["Reclaiming escrow…", "Finalizing…"])}>
+                {busy ? "Working…" : "Reclaim escrow (deadline passed)"}
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -441,6 +465,14 @@ export default function AgreementDetail() {
           ) : (
             <p className="action-wait">Waiting for the payer to accept or dispute the delivery.</p>
           )}
+          {isDeliverer && deadlinePassed ? (
+            <div className="btn-row">
+              <button className="btn btn-ghost" disabled={busy}
+                onClick={() => runAction(() => claimStaleDelivery(caseId!, address), "delivered", ["Claiming…", "Finalizing…"])}>
+                {busy ? "Working…" : "Claim (payer inactive, deadline passed)"}
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

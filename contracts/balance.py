@@ -25,29 +25,23 @@ PAYER'S EVIDENCE (content fetched live from the URLs they submitted):
 {payer_evidence}
 
 How to judge:
-1. VERIFY, DON'T TRUST. Never take either party's written statement as fact.
-   Judge only against what the fetched evidence actually shows.
-2. BROKEN OR EMPTY IS A SIGNAL. If a resource is NOT_PROVIDED,
-   FETCH_FAILED_OR_UNREACHABLE, EMPTY_RESOURCE, or clearly unrelated to the
-   spec, that counts AGAINST any claim depending on it.
-3. INVESTIGATE DIVERGENCE. Where the two parties' evidence disagrees, rely on
-   what the fetched content actually contains. The divergence itself is informative.
-4. SCORE EACH CRITERION, THEN AGGREGATE. Break the locked criteria into checkable
-   items, decide from the evidence whether each is fully, partially, or not met,
-   and aggregate into one fulfillment_pct. Partial, good-faith work should land in
-   the middle — not 0, not 100.
-5. ONLY JUDGE WHAT IS CHECKABLE. If a criterion cannot be verified from
-   web-fetchable evidence, say so and do not let it swing the score.
+1. VERIFY, DON'T TRUST. Judge only against what the fetched evidence actually shows.
+2. BROKEN OR EMPTY IS A SIGNAL. NOT_PROVIDED, FETCH_FAILED_OR_UNREACHABLE, or
+   EMPTY_RESOURCE counts AGAINST any claim depending on it.
+3. INVESTIGATE DIVERGENCE. Rely on what the fetched content actually contains.
+4. SCORE EACH CRITERION, THEN AGGREGATE into one fulfillment_pct. Partial,
+   good-faith work should land in the middle — not 0, not 100.
+5. ONLY JUDGE WHAT IS CHECKABLE.
 
 Respond ONLY as valid JSON, no markdown, no preamble:
 {{
   "fulfillment_pct": 0-100,
   "confidence_level": "High" or "Moderate" or "Low" or "Contested",
-  "deliverer_evidence_assessment": "1 sentence on what the deliverer's fetched resources actually showed",
-  "payer_evidence_assessment": "1 sentence on what the payer's fetched resources actually showed",
-  "divergence_note": "1 sentence on where the two bundles diverged and what you found",
-  "reasoning_summary": "2-3 sentences explaining the fulfillment percentage, grounded in the fetched evidence",
-  "minority_note": "1-2 sentences giving the strongest good-faith case that the percentage should be materially higher or lower — the dissenting view, preserved"
+  "deliverer_evidence_assessment": "1 sentence on what the deliverer's fetched resources showed",
+  "payer_evidence_assessment": "1 sentence on what the payer's fetched resources showed",
+  "divergence_note": "1 sentence on where the two bundles diverged",
+  "reasoning_summary": "2-3 sentences explaining the fulfillment percentage, grounded in the evidence",
+  "minority_note": "1-2 sentences giving the strongest good-faith case for a materially higher or lower percentage"
 }}"""
 
 
@@ -65,6 +59,7 @@ class BalanceProtocol(gl.Contract):
     agreement_deadline: TreeMap[str, str]
     agreement_status: TreeMap[str, str]
     agreement_created_at: TreeMap[str, str]
+    agreement_fee_bps: TreeMap[str, u256]
 
     del_primary_url: TreeMap[str, str]
     del_secondary_url: TreeMap[str, str]
@@ -90,6 +85,7 @@ class BalanceProtocol(gl.Contract):
     settled_to_payer: TreeMap[str, u256]
     settled_fee: TreeMap[str, u256]
     settled_verdict_id: TreeMap[str, str]
+    settled_at: TreeMap[str, str]
 
     case_counter: u256
 
@@ -100,6 +96,9 @@ class BalanceProtocol(gl.Contract):
         self.protocol_fee_bps = u256(protocol_fee_bps)
         self.case_counter = u256(0)
 
+    def _now_date(self) -> str:
+        return str(gl.message_raw["datetime"])[:10]
+
     @gl.public.write
     def set_protocol_fee_bps(self, bps: int):
         sender = str(gl.message.sender_address).lower()
@@ -109,7 +108,6 @@ class BalanceProtocol(gl.Contract):
             raise Exception("Fee out of bounds")
         self.protocol_fee_bps = u256(bps)
 
-    # Controlled faucet: only the owner may mint the testnet settlement token.
     @gl.public.write
     def mint(self, to_address: str, amount: int):
         sender = str(gl.message.sender_address).lower()
@@ -129,15 +127,18 @@ class BalanceProtocol(gl.Contract):
             raise Exception("Payer and deliverer must differ")
         if spec is None or spec.strip() == "":
             raise Exception("Spec required")
+        if deadline is None or len(deadline.strip()) < 10:
+            raise Exception("A deadline (YYYY-MM-DD) is required")
         case_id = "case_" + str(int(self.case_counter))
         self.agreement_ids.append(case_id)
         self.agreement_payer[case_id] = payer
         self.agreement_deliverer[case_id] = deliverer
         self.agreement_spec[case_id] = spec
         self.agreement_amount[case_id] = u256(amount)
-        self.agreement_deadline[case_id] = deadline
+        self.agreement_deadline[case_id] = deadline.strip()
         self.agreement_status[case_id] = "created"
         self.agreement_created_at[case_id] = created_at
+        self.agreement_fee_bps[case_id] = self.protocol_fee_bps
         self.del_submitted[case_id] = "false"
         self.pay_submitted[case_id] = "false"
         self.case_counter = u256(int(self.case_counter) + 1)
@@ -153,6 +154,18 @@ class BalanceProtocol(gl.Contract):
         if sender != self.agreement_deliverer[case_id].lower():
             raise Exception("Only the named deliverer can accept")
         self.agreement_status[case_id] = "accepted"
+
+    @gl.public.write
+    def cancel_agreement(self, case_id: str):
+        sender = str(gl.message.sender_address).lower()
+        if case_id not in self.agreement_status:
+            raise Exception("Unknown agreement")
+        st = self.agreement_status[case_id]
+        if st != "created" and st != "accepted":
+            raise Exception("Can only cancel before the escrow is funded")
+        if sender != self.agreement_payer[case_id].lower():
+            raise Exception("Only the payer can cancel")
+        self.agreement_status[case_id] = "cancelled"
 
     @gl.public.write
     def fund_escrow(self, case_id: str):
@@ -186,6 +199,59 @@ class BalanceProtocol(gl.Contract):
         self.agreement_status[case_id] = "delivered"
 
     @gl.public.write
+    def reclaim_expired(self, case_id: str) -> str:
+        sender = str(gl.message.sender_address).lower()
+        if case_id not in self.agreement_status:
+            raise Exception("Unknown agreement")
+        if self.agreement_status[case_id] != "active":
+            raise Exception("Only a funded, undelivered agreement can be reclaimed")
+        if sender != self.agreement_payer[case_id].lower():
+            raise Exception("Only the payer can reclaim")
+        if not (self._now_date() > self.agreement_deadline[case_id][:10]):
+            raise Exception("The deadline has not passed")
+        amount = int(self.agreement_amount[case_id])
+        payer = self.agreement_payer[case_id].lower()
+        pbal = int(self.balances[payer]) if payer in self.balances else 0
+        self.balances[payer] = u256(pbal + amount)
+        self.settled_fulfillment_pct[case_id] = u256(0)
+        self.settled_to_deliverer[case_id] = u256(0)
+        self.settled_to_payer[case_id] = u256(amount)
+        self.settled_fee[case_id] = u256(0)
+        self.settled_verdict_id[case_id] = "reclaimed_expired"
+        self.settled_at[case_id] = self._now_date()
+        self.agreement_status[case_id] = "refunded"
+        return "refunded:" + str(amount)
+
+    @gl.public.write
+    def claim_stale_delivery(self, case_id: str) -> str:
+        sender = str(gl.message.sender_address).lower()
+        if case_id not in self.agreement_status:
+            raise Exception("Unknown agreement")
+        if self.agreement_status[case_id] != "delivered":
+            raise Exception("Only a delivered agreement can be claimed")
+        if sender != self.agreement_deliverer[case_id].lower():
+            raise Exception("Only the deliverer can claim a stale delivery")
+        if not (self._now_date() > self.agreement_deadline[case_id][:10]):
+            raise Exception("The deadline has not passed")
+        amount = int(self.agreement_amount[case_id])
+        fee = (amount * int(self.agreement_fee_bps[case_id])) // 10000
+        to_deliverer = amount - fee
+        deliverer = self.agreement_deliverer[case_id].lower()
+        fee_wallet = self.fee_wallet.lower()
+        dbal = int(self.balances[deliverer]) if deliverer in self.balances else 0
+        self.balances[deliverer] = u256(dbal + to_deliverer)
+        fbal = int(self.balances[fee_wallet]) if fee_wallet in self.balances else 0
+        self.balances[fee_wallet] = u256(fbal + fee)
+        self.settled_fulfillment_pct[case_id] = u256(100)
+        self.settled_to_deliverer[case_id] = u256(to_deliverer)
+        self.settled_to_payer[case_id] = u256(0)
+        self.settled_fee[case_id] = u256(fee)
+        self.settled_verdict_id[case_id] = "claimed_stale"
+        self.settled_at[case_id] = self._now_date()
+        self.agreement_status[case_id] = "settled"
+        return "claimed:" + str(to_deliverer)
+
+    @gl.public.write
     def accept_delivery(self, case_id: str) -> str:
         sender = str(gl.message.sender_address).lower()
         if case_id not in self.agreement_status:
@@ -195,7 +261,7 @@ class BalanceProtocol(gl.Contract):
         if sender != self.agreement_payer[case_id].lower():
             raise Exception("Only the payer can accept delivery")
         amount = int(self.agreement_amount[case_id])
-        fee = (amount * int(self.protocol_fee_bps)) // 10000
+        fee = (amount * int(self.agreement_fee_bps[case_id])) // 10000
         to_deliverer = amount - fee
         deliverer = self.agreement_deliverer[case_id].lower()
         fee_wallet = self.fee_wallet.lower()
@@ -208,6 +274,7 @@ class BalanceProtocol(gl.Contract):
         self.settled_to_deliverer[case_id] = u256(to_deliverer)
         self.settled_to_payer[case_id] = u256(0)
         self.settled_fee[case_id] = u256(fee)
+        self.settled_at[case_id] = self._now_date()
         self.agreement_status[case_id] = "settled"
         return "released:" + str(to_deliverer)
 
@@ -251,16 +318,12 @@ class BalanceProtocol(gl.Contract):
         def _bundle(primary_url: str, secondary_url: str) -> str:
             p_status, p_text = _fetch_one(primary_url)
             s_status, s_text = _fetch_one(secondary_url)
-            full = json.dumps({
-                "primary": {"url": primary_url, "status": p_status, "content": p_text},
-                "secondary": {"url": secondary_url, "status": s_status, "content": s_text},
-            }, sort_keys=True)
-            h = hashlib.sha256(full.encode("utf-8")).hexdigest()
             view = json.dumps({
                 "primary": {"url": primary_url, "status": p_status, "content": p_text[:8000]},
                 "secondary": {"url": secondary_url, "status": s_status, "content": s_text[:8000]},
             }, sort_keys=True)
-            return json.dumps({"hash": h, "bytes": len(full), "view": view}, sort_keys=True)
+            h = hashlib.sha256(view.encode("utf-8")).hexdigest()
+            return json.dumps({"hash": h, "bytes": len(view), "view": view}, sort_keys=True)
 
         def fetch_deliverer() -> str:
             return _bundle(del_primary, del_secondary)
@@ -292,7 +355,7 @@ class BalanceProtocol(gl.Contract):
                 parsed = result
             return json.dumps(parsed, sort_keys=True)
         principle = (
-            "The verdict must agree on fulfillment_pct within a tolerance of 10 "
+            "The verdict must agree on fulfillment_pct within a tolerance of 5 "
             "points. It must agree on the coarse outcome band: not fulfilled "
             "(0-33), partially fulfilled (34-66), or substantially fulfilled "
             "(67-100). The reasoning must be grounded in the fetched evidence and "
@@ -301,15 +364,14 @@ class BalanceProtocol(gl.Contract):
         judgment_str = gl.eq_principle.prompt_comparative(judge_fn, principle)
         judgment = json.loads(judgment_str)
 
-        pct_raw = judgment.get("fulfillment_pct", 0)
+        if not isinstance(judgment, dict) or "fulfillment_pct" not in judgment:
+            raise Exception("Malformed verdict (missing fulfillment_pct); settlement reverted, retry")
         try:
-            pct = int(pct_raw)
+            pct = int(judgment["fulfillment_pct"])
         except (TypeError, ValueError):
-            pct = 0
-        if pct < 0:
-            pct = 0
-        if pct > 100:
-            pct = 100
+            raise Exception("Malformed verdict (fulfillment_pct not an integer); settlement reverted, retry")
+        if pct < 0 or pct > 100:
+            raise Exception("Malformed verdict (fulfillment_pct out of range); settlement reverted, retry")
 
         self.confidence_level[case_id] = str(judgment.get("confidence_level", "Low"))
         self.reasoning_summary[case_id] = str(judgment.get("reasoning_summary", ""))
@@ -321,7 +383,7 @@ class BalanceProtocol(gl.Contract):
         self.payer_evidence_hash[case_id] = pay_hash_local
 
         amount = int(self.agreement_amount[case_id])
-        fee = (amount * int(self.protocol_fee_bps)) // 10000
+        fee = (amount * int(self.agreement_fee_bps[case_id])) // 10000
         distributable = amount - fee
         to_deliverer = (distributable * pct) // 100
         to_payer = distributable - to_deliverer
@@ -342,6 +404,7 @@ class BalanceProtocol(gl.Contract):
         self.settled_to_payer[case_id] = u256(to_payer)
         self.settled_fee[case_id] = u256(fee)
         self.settled_verdict_id[case_id] = "consensus"
+        self.settled_at[case_id] = self._now_date()
         self.agreement_status[case_id] = "settled"
         return "settled:" + str(pct) + ":" + str(to_deliverer) + ":" + str(to_payer)
 
@@ -368,6 +431,7 @@ class BalanceProtocol(gl.Contract):
             "deadline": self.agreement_deadline[case_id],
             "status": self.agreement_status[case_id],
             "created_at": self.agreement_created_at[case_id],
+            "fee_bps": int(self.agreement_fee_bps[case_id]) if case_id in self.agreement_fee_bps else 0,
             "deliverer_submitted": self.del_submitted[case_id] if case_id in self.del_submitted else "false",
             "deliverer_primary_url": self.del_primary_url[case_id] if case_id in self.del_primary_url else "",
             "deliverer_secondary_url": self.del_secondary_url[case_id] if case_id in self.del_secondary_url else "",
@@ -389,6 +453,7 @@ class BalanceProtocol(gl.Contract):
             "settled_to_deliverer": int(self.settled_to_deliverer[case_id]) if case_id in self.settled_to_deliverer else 0,
             "settled_to_payer": int(self.settled_to_payer[case_id]) if case_id in self.settled_to_payer else 0,
             "settled_fee": int(self.settled_fee[case_id]) if case_id in self.settled_fee else 0,
+            "settled_at": self.settled_at[case_id] if case_id in self.settled_at else "",
         }
 
     @gl.public.view

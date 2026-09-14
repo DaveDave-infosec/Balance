@@ -20,10 +20,10 @@ const WalletContext = createContext<WalletState | undefined>(undefined);
 
 function loadOrCreate(): string {
   let pk = "";
-  try { pk = localStorage.getItem(KEY) || ""; } catch { pk = ""; }
+  try { pk = sessionStorage.getItem(KEY) || ""; } catch { pk = ""; }
   if (!PK_RE.test(pk)) {
     pk = generatePrivateKey();
-    try { localStorage.setItem(KEY, pk); } catch { /* ignore */ }
+    try { sessionStorage.setItem(KEY, pk); } catch { /* ignore */ }
   }
   return pk;
 }
@@ -72,7 +72,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const regenerate = () => {
     const pk = generatePrivateKey();
-    try { localStorage.setItem(KEY, pk); } catch { /* ignore */ }
+    try { sessionStorage.setItem(KEY, pk); } catch { /* ignore */ }
     setAddress(setSessionWallet(pk));
     setMode("session");
     modeRef.current = "session";
@@ -81,7 +81,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const importKey = (pk: string) => {
     const k = pk.trim();
     if (!PK_RE.test(k)) { alert("Invalid private key — need 0x followed by 64 hex characters."); return; }
-    try { localStorage.setItem(KEY, k); } catch { /* ignore */ }
+    try { sessionStorage.setItem(KEY, k); } catch { /* ignore */ }
     setAddress(setSessionWallet(k));
     setMode("session");
     modeRef.current = "session";

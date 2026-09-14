@@ -40,7 +40,7 @@ function Header() {
           </button>
           {menuOpen ? (
             <div className="wallet-dropdown">
-              <div className="wallet-dd-label mono">{mode === "metamask" ? "MetaMask" : "Session wallet"}</div>
+              <div className="wallet-dd-label mono">{mode === "metamask" ? "MetaMask" : "Session wallet · testnet demo"}</div>
               <button className="wallet-dd-item" onClick={copyAddr}>Copy address</button>
               {mode === "session" ? (
                 <>

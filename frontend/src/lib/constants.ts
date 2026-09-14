@@ -7,7 +7,7 @@ export const STUDIO_CHAIN_HEX = "0xF22F";
 // (VITE_ prefix) override for Vercel; fallbacks are our live testnet deploys.
 export const BALANCE_CONTRACT_ADDRESS =
   import.meta.env.VITE_BALANCE_CONTRACT_ADDRESS ||
-  "0xABd9e20761BF1724E3206790C3600329be225f6B";
+  "0x478e947c013C42114C7Ed33E02F30ae8E0B6D6ea";
 
 // Optional admin wallet (for a faucet/admin panel). Lowercased for comparison.
 export const OWNER_ADDRESS = (import.meta.env.VITE_OWNER_ADDRESS || "").toLowerCase();
@@ -22,7 +22,9 @@ export type AgreementStatus =
   | "active"
   | "delivered"
   | "disputed"
-  | "settled";
+  | "settled"
+  | "cancelled"
+  | "refunded";
 
 // Shape returned by escrow.get_agreement (mirrors _build_agreement).
 export interface Agreement {
@@ -55,6 +57,8 @@ export interface Agreement {
   settled_to_deliverer: number;
   settled_to_payer: number;
   settled_fee: number;
+  fee_bps?: number;
+  settled_at?: string;
 }
 
 // Shape returned by judge.get_verdict (mirrors _build_verdict).

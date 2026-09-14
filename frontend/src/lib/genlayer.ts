@@ -113,6 +113,15 @@ export async function acceptDelivery(caseId: string, _caller?: string) {
 export async function disputeDelivery(caseId: string, primaryUrl: string, secondaryUrl: string, statement: string, _caller?: string) {
   return balanceWrite("dispute_delivery", [caseId, primaryUrl, secondaryUrl, statement]);
 }
+export async function cancelAgreement(caseId: string, _caller?: string) {
+  return balanceWrite("cancel_agreement", [caseId]);
+}
+export async function reclaimExpired(caseId: string, _caller?: string) {
+  return balanceWrite("reclaim_expired", [caseId]);
+}
+export async function claimStaleDelivery(caseId: string, _caller?: string) {
+  return balanceWrite("claim_stale_delivery", [caseId]);
+}
 
 export async function escrowBalanceOf(address: string) {
   return await read("balance_of", [address]);

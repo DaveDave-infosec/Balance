@@ -27,7 +27,7 @@ Both parties submit evidence independently. The judge verifies claims against th
 - **`contracts/balance.py`** — a single Python Intelligent Contract on GenLayer Studio. It holds the escrow, records each agreement and its locked criteria, and on dispute fetches evidence (`gl.eq_principle.strict_eq`), reasons to a fulfillment percentage by validator consensus (`gl.eq_principle.prompt_comparative`), and splits the escrow — atomically. It is the only thing that moves the money, and only by the consensus result.
 - **`frontend/`** — React + TypeScript + Vite, using `genlayer-js`.
 
-**Deployed contract:** `0xABd9e20761BF1724E3206790C3600329be225f6B`
+**Deployed contract:** `0x478e947c013C42114C7Ed33E02F30ae8E0B6D6ea`
 **Network:** GenLayer Studio (chain ID 61999). genUSDC is a mock settlement token for the testnet.
 
 ## Running the frontend
@@ -70,3 +70,7 @@ python -m pytest tests/test_guards.py -v
 ## Evidence integrity & disagreement
 
 On a dispute, the judge fetches both parties' evidence, and the full fetched content is `sha256`-hashed and recorded on the settled case — so the verdict is provably bound to exactly what was judged. Every settlement preserves both a **Majority** and a **Minority** position, surfacing where competent evaluators would split.
+
+## Safety & recovery
+
+The protocol fee is locked into each agreement at creation, so a later fee change can't alter an in-flight split. Every agreement has a deadline: before funding the payer can cancel; after the deadline a funded-but-undelivered escrow can be reclaimed by the payer, and a delivered-but-unreviewed one can be claimed by the deliverer — so funds can never be stranded. A malformed consensus verdict reverts the settlement (funds untouched, retryable) rather than defaulting the payout to zero.
