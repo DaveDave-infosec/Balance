@@ -290,7 +290,7 @@ export default function AgreementDetail() {
           </div>
           <div className="meta-row">
             <span>Protocol fee: {a.settled_fee.toLocaleString()} genUSDC</span>
-            <span className="mono">{a.settled_verdict_id === "accepted_in_full" ? "accepted in full" : "consensus"}</span>
+            <span className="mono">{a.settled_verdict_id.replace(/_/g, " ")}</span>
           </div>
         </div>
       ) : null}
