@@ -1,4 +1,6 @@
 import pytest
+import hashlib
+import json
 
 CONTRACT = "contracts/balance.py"
 SDK = "v0.2.16"
@@ -338,3 +340,33 @@ def test_cannot_cancel_after_funding(direct_deploy, direct_vm, direct_owner, dir
     direct_vm.sender = direct_owner
     with direct_vm.expect_revert("Can only cancel before the escrow is funded"):
         c.cancel_agreement("case_0")
+
+
+def test_evidence_hash_binds_to_judged_content(direct_deploy, direct_vm, direct_owner, direct_bob):
+    c = _deploy(direct_deploy)
+    _delivered(c, direct_vm, direct_owner, direct_bob, "2026-08-01")
+    body = "deliverable readme, version 1"
+    direct_vm.mock_web(r".*", {"method": "GET", "status": 200, "body": body})
+    direct_vm.mock_llm(r".*", VALID_VERDICT)
+    direct_vm.sender = direct_owner
+    c.dispute_delivery("case_0", "https://example.com", "", "review")
+    ag = c.get_agreement("case_0")
+    view = json.dumps({
+        "primary": {"url": "https://example.com", "status": "OK", "content": body[:8000]},
+        "secondary": {"url": "", "status": "NOT_PROVIDED", "content": ""},
+    }, sort_keys=True)
+    expected = hashlib.sha256(view.encode("utf-8")).hexdigest()
+    # on-chain hash == sha256 of exactly the judged content, so a changed URL yields a different hash
+    assert ag["deliverer_evidence_hash"] == expected
+
+
+def test_consensus_failure_reverts(direct_deploy, direct_vm, direct_owner, direct_bob):
+    c = _deploy(direct_deploy)
+    _delivered(c, direct_vm, direct_owner, direct_bob, "2026-08-01")
+    direct_vm.mock_web(r".*", {"method": "GET", "status": 200, "body": "evidence"})
+    direct_vm.mock_llm(r".*", "not valid json at all")  # unparseable judge output -> consensus failure
+    direct_vm.sender = direct_owner
+    with direct_vm.expect_revert():
+        c.dispute_delivery("case_0", "https://example.com", "", "review")
+    assert c.get_agreement("case_0")["status"] == "delivered"  # not stranded, retryable
+    assert c.balance_of(_hex(direct_bob)) == 0

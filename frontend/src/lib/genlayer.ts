@@ -40,7 +40,9 @@ export function setSessionWallet(privateKey: string): string {
 }
 
 export function setMetaMaskWallet(address: string): string {
-  _wallet = createClient({ chain: studionet, account: address as `0x${string}` } as any);
+  const provider = (window as any).ethereum;
+  if (!provider) throw new Error("No injected wallet (window.ethereum) found.");
+  _wallet = createClient({ chain: studionet, account: address as `0x${string}`, provider } as any);
   _mode = "metamask";
   return address;
 }

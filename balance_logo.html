@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Balance logo</title></head>
+<body style="font-family:system-ui,sans-serif;padding:24px;background:#f0ede4">
+<h3>Balance logo — click a link to download the 1024×1024 PNG</h3>
+<div id="out"></div>
+<script>
+const light = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="#EDE6D6"/>
+  <g transform="translate(0,-24)">
+    <path d="M512 600 L448 704 L576 704 Z" fill="#B08430"/>
+    <line x1="512" y1="410" x2="512" y2="604" stroke="#241E17" stroke-width="22"/>
+    <line x1="232" y1="410" x2="792" y2="410" stroke="#241E17" stroke-width="32" stroke-linecap="round"/>
+    <line x1="232" y1="410" x2="232" y2="494" stroke="#C4B79E" stroke-width="12"/>
+    <path d="M168 494 Q232 578 296 494" fill="none" stroke="#6B4423" stroke-width="24" stroke-linecap="round"/>
+    <circle cx="232" cy="410" r="20" fill="#6B4423"/>
+    <line x1="792" y1="410" x2="792" y2="494" stroke="#C4B79E" stroke-width="12"/>
+    <path d="M728 494 Q792 578 856 494" fill="none" stroke="#3D5A45" stroke-width="24" stroke-linecap="round"/>
+    <circle cx="792" cy="410" r="20" fill="#3D5A45"/>
+  </g>
+</svg>`;
+const dark = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="#241E17"/>
+  <g transform="translate(0,-24)">
+    <path d="M512 600 L448 704 L576 704 Z" fill="#B08430"/>
+    <line x1="512" y1="410" x2="512" y2="604" stroke="#B08430" stroke-width="22"/>
+    <line x1="232" y1="410" x2="792" y2="410" stroke="#B08430" stroke-width="32" stroke-linecap="round"/>
+    <line x1="232" y1="410" x2="232" y2="494" stroke="#8a7f68" stroke-width="12"/>
+    <path d="M168 494 Q232 578 296 494" fill="none" stroke="#C8955A" stroke-width="24" stroke-linecap="round"/>
+    <circle cx="232" cy="410" r="20" fill="#C8955A"/>
+    <line x1="792" y1="410" x2="792" y2="494" stroke="#8a7f68" stroke-width="12"/>
+    <path d="M728 494 Q792 578 856 494" fill="none" stroke="#6E9377" stroke-width="24" stroke-linecap="round"/>
+    <circle cx="792" cy="410" r="20" fill="#6E9377"/>
+  </g>
+</svg>`;
+function render(name, svg){
+  const url = URL.createObjectURL(new Blob([svg], {type:'image/svg+xml'}));
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas'); c.width = 1024; c.height = 1024;
+    c.getContext('2d').drawImage(img, 0, 0, 1024, 1024);
+    const png = c.toDataURL('image/png');
+    const wrap = document.createElement('div'); wrap.style.margin = '18px 0';
+    const prev = document.createElement('img'); prev.src = png; prev.width = 150; prev.style.border = '1px solid #999'; prev.style.verticalAlign = 'middle';
+    const a = document.createElement('a'); a.href = png; a.download = 'balance_logo_' + name + '.png'; a.textContent = '  ⬇ download balance_logo_' + name + '.png'; a.style.marginLeft = '14px'; a.style.fontSize = '16px';
+    wrap.appendChild(prev); wrap.appendChild(a);
+    document.getElementById('out').appendChild(wrap);
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+}
+render('light', light);
+render('dark', dark);
+</script>
+</body>
+</html>
